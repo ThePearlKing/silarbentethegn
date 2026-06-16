@@ -1,0 +1,6 @@
+# LÖVE save data
+*.love
+# editor / OS cruft
+.DS_Store
+*.swp
+.claude/
