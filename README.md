@@ -73,11 +73,11 @@ Everything renders in one of three scripts, switchable in settings — each opti
 
 ## Features
 
-- **Seeded, randomized realm** — every run's layout is different; gates are found by sensing, never adjacent to one another.
+- **Seeded, randomized realm** — every run's layout is different; gates are found by sensing your surroundings.
 - **Permadeath** — only **wins** are kept (a permanent counter). The current run autosaves each turn and is deleted on death.
 - **Positional, directional combat** — no battle screen; foes are entities ringing the things that matter, struck by direction with your corruption as ammo.
 - **Guided tutorial** — teaches the loop in order, taking you to the right tab for each step, without dispelling the mystery.
-- **"The rite plays itself"** — a watchable autoplay mode driven by a solver that *knows the strategy but not the map*: it explores blind, routes around foes, breaks through only when blocked, and actually beats the game (1x / 5x / 10x speeds).
+- **"The rite plays itself"** — a watchable autoplay mode driven by a solver that *knows the strategy but not the map*: it explores blind, routes around foes, breaks through only when blocked, and wins (1x / 5x / 10x speeds).
 - **Two UI themes** — a colourful "cool" skin (default) and a deliberately plain one.
 
 ---
