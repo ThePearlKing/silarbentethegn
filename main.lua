@@ -292,7 +292,8 @@ function love.textinput(t)
   if G.state ~= "play" or AP.enabled then return end
   if #t == 1 then
     local b = t:byte(1)
-    if b >= 32 and b <= 126 and #G.cmdbuf < 40 then G.cmdbuf = G.cmdbuf .. t end
+    -- space is added via keypressed (the web runtime swallows it from textinput)
+    if b >= 33 and b <= 126 and #G.cmdbuf < 40 then G.cmdbuf = G.cmdbuf .. t end
   end
 end
 
@@ -318,6 +319,7 @@ function love.keypressed(key)
       return
     end
     if key == "return" or key == "kpenter" then submit()
+    elseif key == "space" then if #G.cmdbuf < 40 then G.cmdbuf = G.cmdbuf .. " " end  -- web-safe space
     elseif key == "backspace" then G.cmdbuf = G.cmdbuf:sub(1, -2)
     elseif key == "escape" then if G.overlay then G.overlay = nil else toMenu() end
     elseif key == "up" then G.scroll = math.min(G.scroll + 1, math.max(0, G._lines - G._visible))
