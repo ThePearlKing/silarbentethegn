@@ -8,7 +8,8 @@ local synth = require("src.synth")
 local T     = require("src.tutorial")
 local Glyph = require("src.glyph")
 local L     = require("src.lang")
-local AP    = require("src.autoplay")  -- the visible, paced "rite plays itself"
+local AP     = require("src.autoplay")  -- the visible, paced "rite plays itself"
+local Portal = require("src.portal")    -- games.brassey.io achievements / identity (web)
 
 local G = {
   state    = "menu",   -- menu | play | over
@@ -49,7 +50,7 @@ local function stopAuto()
 end
 
 local function startAuto()
-  local w, h = love.graphics.getDimensions()
+  local w, h = UI.W, UI.H          -- cursor lives in virtual (letterboxed) space
   AP.start(w, h)
   G.overlay = nil
   -- the system cursor stays visible alongside the AI's light-blue hand
@@ -96,7 +97,7 @@ local function runCommand(raw)
   local head0 = raw:lower():match("%S+")
   if head0 == "vyrna" then G.overlay = "stats"; G.cmdbuf = ""; return end
   if head0 == "karth" then G.overlay = nil; G.cmdbuf = ""; return end
-  if head0 == "rosetta" then G.overlay = "codex"; G.cmdbuf = ""; return end
+  if head0 == "rosetta" then G.overlay = "codex"; G.cmdbuf = ""; Portal.unlock("decipher"); return end
   push({ kind = "echo", text = raw })
   -- commands never switch the screen; whatever tab you're on, you stay on.
   local before = sim.node
@@ -141,7 +142,7 @@ local function handlePlayClick(id)
   if id == "tab:menu" then toMenu(); return end
   if id == "tab:map" then G.overlay = nil            -- back to the map (the main view)
   elseif id == "tab:stats" then G.overlay = (G.overlay == "stats") and nil or "stats"
-  elseif id == "tab:codex" then G.overlay = (G.overlay == "codex") and nil or "codex" end
+  elseif id == "tab:codex" then G.overlay = (G.overlay == "codex") and nil or "codex"; Portal.unlock("decipher") end
   tutorialAdvance()
 end
 
@@ -228,6 +229,7 @@ function love.load()
   applyCfg()
   UI.load()
   synth.load()
+  Portal.init()   -- detect the web portal (achievements / identity); silent on desktop
   -- give the paced autoplay driver its hooks into the UI / IO
   AP.bind({
     hasRegion    = function(id) return UI.getRegion(id) ~= nil end,
@@ -246,11 +248,26 @@ function love.update(dt)
   if G.state == "play" and AP.enabled then AP.update(dt * AP.speed, sim) end
 end
 
+-- pause audio when the tab/window loses focus, resume on return (recommended for web)
+local _pausedAudio
+function love.focus(f)
+  if not (love.audio and love.audio.pause) then return end
+  if not f then
+    _pausedAudio = love.audio.pause()             -- pauses all sources, returns them
+  elseif _pausedAudio then
+    love.audio.play(_pausedAudio); _pausedAudio = nil
+  end
+end
+
 function love.draw()
+  love.graphics.clear(0, 0, 0)   -- black letterbox bars around the scaled game
+  UI.computeScale()
   UI.beginFrame()
+  UI.push()
   if G.state == "menu" then
     UI.menu({ wins = G.wins, hasSave = G.hasSave, codex = G.menuCodex,
-              settings = G.menuSettings, info = G.menuInfo, infoSeen = G.infoSeen, auto = AP.enabled })
+              settings = G.menuSettings, info = G.menuInfo, infoSeen = G.infoSeen, auto = AP.enabled,
+              achv = G.menuAchv, handle = (Portal.signedIn and Portal.handle) or nil })
   elseif G.state == "play" then
     UI.play(sim, { log = G.log, cmdbuf = G.cmdbuf, scroll = G.scroll, overlay = G.overlay,
                    auto = AP.enabled, autoSpeed = AP.speed, tutorialText = (T.active and T.text()) or nil,
@@ -264,6 +281,7 @@ function love.draw()
     UI.over(sim, { wins = G.wins, ai = AP.tainted })
   end
   if G.resetConfirm then UI.resetModal(G.resetBuf) end   -- modal on top of everything
+  UI.pop()
 end
 
 function love.textinput(t)
@@ -310,6 +328,7 @@ function love.keypressed(key)
     if key == "escape" then
       if G.menuInfo then G.menuInfo = false
       elseif G.menuCodex then G.menuCodex = false
+      elseif G.menuAchv then G.menuAchv = false
       elseif G.menuSettings then G.menuSettings = false
       else love.event.quit() end
     end
@@ -326,6 +345,7 @@ end
 
 function love.mousepressed(mx, my, b)
   if b ~= 1 then return end
+  mx, my = UI.toVirtual(mx, my)   -- screen -> virtual (letterboxed) coords
   local id = UI.hitTest(mx, my)
 
   if G.resetConfirm then                 -- modal: any click cancels (confirm is by typing)
@@ -337,6 +357,7 @@ function love.mousepressed(mx, my, b)
   if G.state == "menu" then
     if G.menuInfo then G.menuInfo = false; return end
     if G.menuCodex then G.menuCodex = false; return end
+    if G.menuAchv then G.menuAchv = false; return end
     if G.menuSettings then
       if id and id:match("^set:") then handleSettingClick(id)   -- toggle a setting / open reset
       elseif id == "setpanel" then                              -- inside panel: keep open
@@ -348,7 +369,8 @@ function love.mousepressed(mx, my, b)
     elseif id == "tutorial" then startTutorial()
     elseif id == "watch" then startWatch()
     elseif id == "settings" then G.menuSettings = true
-    elseif id == "codex" then G.menuCodex = true
+    elseif id == "codex" then G.menuCodex = true; Portal.unlock("decipher")
+    elseif id == "achv" then G.menuAchv = true; Portal.refresh()
     elseif id == "info" then G.menuInfo = true; if not G.infoSeen then G.infoSeen = true; persistCfg() end
     elseif id == "quit" then love.event.quit() end
     return

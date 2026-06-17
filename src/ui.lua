@@ -4,10 +4,12 @@
 -- ALL Gelenath text is drawn in a single fixed colour (never english, never a
 -- decode mode), distinct from english prose and from your own typed input.
 
-local Glyph = require("src.glyph")
-local R     = require("src.richtext")
-local L     = require("src.lang")
-local W     = require("src.world")
+local Glyph  = require("src.glyph")
+local R      = require("src.richtext")
+local L      = require("src.lang")
+local W      = require("src.world")
+local ACHV   = require("src.achievements")
+local Portal = require("src.portal")
 
 local UI = { cool = true }  -- colourful by default (overridden by saved cfg)
 
@@ -58,6 +60,32 @@ end
 -- ----------------------------------------------------------- hit regions -----
 UI._hot = {}
 function UI.beginFrame() UI._hot = {} love.graphics.setLineStyle(UI.cool and "smooth" or "rough") end
+
+-- VIRTUAL / DESIGN RESOLUTION. The whole game is laid out at UI.W x UI.H and then
+-- scaled UNIFORMLY to the real window (centred, with black letterbox bars). So the
+-- proportions never stretch, and the UI never shrinks relative to a bigger screen.
+UI.W, UI.H = 1280, 800
+UI._scale, UI._ox, UI._oy = 1, 0, 0
+function UI.computeScale()
+  local rw, rh = love.graphics.getDimensions()
+  local s = math.min(rw / UI.W, rh / UI.H)
+  UI._scale = s
+  UI._ox = math.floor((rw - UI.W * s) / 2)
+  UI._oy = math.floor((rh - UI.H * s) / 2)
+end
+function UI.push()
+  love.graphics.push()
+  love.graphics.translate(UI._ox, UI._oy)
+  love.graphics.scale(UI._scale)
+  love.graphics.setScissor(UI._ox, UI._oy, UI.W * UI._scale, UI.H * UI._scale)
+end
+function UI.pop()
+  love.graphics.setScissor()
+  love.graphics.pop()
+end
+-- map a real screen point into virtual space (for hit-testing / hover)
+function UI.toVirtual(mx, my) return (mx - UI._ox) / UI._scale, (my - UI._oy) / UI._scale end
+local function vmouse() return UI.toVirtual(love.mouse.getX(), love.mouse.getY()) end
 local function reg(id, x, y, w, h) UI._hot[#UI._hot + 1] = { id = id, x = x, y = y, w = w, h = h } end
 function UI.hitTest(mx, my)
   for i = #UI._hot, 1, -1 do
@@ -161,7 +189,7 @@ end
 -- ------------------------------------------------------------- background ----
 local function drawBG()
   local th = T()
-  local w, h = love.graphics.getDimensions()
+  local w, h = UI.W, UI.H
   if UI.cool then
     -- vertical gradient via two rectangles + mesh-ish bands
     for i = 0, 40 do
@@ -178,13 +206,13 @@ local function drawBG()
   end
 end
 
-local overlayCodex, overlaySettings, overlayInfo  -- forward declarations (used by the menu too)
+local overlayCodex, overlaySettings, overlayInfo, overlayAchievements  -- forward declarations (used by the menu too)
 
 -- ============================================================= MAIN MENU =====
 function UI.menu(ctx)
   local th = T()
   drawBG()
-  local w, h = love.graphics.getDimensions()
+  local w, h = UI.W, UI.H
   -- title (runic)
   setc(th.gel)
   Glyph.drawTextCentered(L.title, w / 2, h * 0.16, 40)
@@ -198,6 +226,11 @@ function UI.menu(ctx)
   love.graphics.setFont(UI.fs)
   Glyph.drawText("wins", 24, h - 40, 14)
   Glyph.drawText(tostring(ctx.wins), 24 + 56, h - 42, 18)
+  -- signed-in handle (from the portal), shown faintly
+  if ctx.handle then
+    setc(th.english, 0.5); love.graphics.setFont(UI.fs)
+    love.graphics.print("bound :: " .. ctx.handle, 24, h - 64)
+  end
 
   -- buttons (centred stack)
   local items = {}
@@ -219,7 +252,7 @@ function UI.menu(ctx)
     info = "what is this?", tutorial = "learn — a guided rite", watch = "watch the rite play itself",
     settings = "settings", codex = "the codex (rosetta)", quit = "exit",
   }
-  local mx, my = love.mouse.getPosition()
+  local mx, my = vmouse()
   local hoverTr
   for _, it in ipairs(items) do
     local hov = mx >= bx and mx <= bx + bw and my >= by and my <= by + bh
@@ -228,8 +261,16 @@ function UI.menu(ctx)
     by = by + bh + gap
   end
 
+  -- achievements: a small corner button (kept OUT of the crowded central stack)
+  do
+    local aw, ah = 160, 32
+    local ax, ay = w - aw - 24, h - ah - 22
+    local hov = mx >= ax and mx <= ax + aw and my >= ay and my <= ay + ah
+    button("achv", ax, ay, aw, ah, "achievements", hov, "achievements")
+  end
+
   -- big bobbing arrow pointing at INFO until it's been opened once
-  if not ctx.infoSeen and not ctx.info and not ctx.codex and not ctx.settings then
+  if not ctx.infoSeen and not ctx.info and not ctx.codex and not ctx.settings and not ctx.achv then
     local r = UI.getRegion("info")
     if r then
       local bob = math.sin(love.timer.getTime() * 4) * 12
@@ -245,7 +286,7 @@ function UI.menu(ctx)
   end
 
   -- translation tooltip near the cursor
-  if hoverTr and not ctx.codex and not ctx.settings and not ctx.info then
+  if hoverTr and not ctx.codex and not ctx.settings and not ctx.info and not ctx.achv then
     love.graphics.setFont(UI.fs)
     local tw = UI.fs:getWidth(hoverTr) + 18
     local tx, ty = mx + 16, my + 8
@@ -259,6 +300,9 @@ function UI.menu(ctx)
   if ctx.info then
     overlayInfo(w * 0.12, h * 0.09, w * 0.76, h * 0.80)
     reg("menuinfoclose", 0, 0, w, h)
+  elseif ctx.achv then
+    overlayAchievements(w * 0.14, h * 0.08, w * 0.72, h * 0.84)
+    reg("menuachvclose", 0, 0, w, h)
   elseif ctx.codex then
     overlayCodex(w * 0.10, h * 0.12, w * 0.80, h * 0.74)
     reg("menucodexclose", 0, 0, w, h)
@@ -346,7 +390,7 @@ local function drawTabs(x, y, w, h, selId)
   local n = #L.tabs
   local gap = 8
   local bw = (w - gap * (n - 1)) / n
-  local mx, my = love.mouse.getPosition()
+  local mx, my = vmouse()
   for i, tab in ipairs(L.tabs) do
     local bx = x + (i - 1) * (bw + gap)
     local hov = mx >= bx and mx <= bx + bw and my >= y and my <= y + h
@@ -566,8 +610,8 @@ end
 function UI.tooltip(text)
   if not text then return end
   local th = T()
-  local mx, my = love.mouse.getPosition()
-  local w = love.graphics.getWidth()
+  local mx, my = vmouse()
+  local w = UI.W
   love.graphics.setFont(UI.fs)
   local tw = UI.fs:getWidth(text) + 18
   local tx, ty = mx + 16, my + 8
@@ -609,6 +653,53 @@ function overlayInfo(x, y, w, h)
   love.graphics.printf("(click anywhere to close)", x, y + h - 30, w, "center")
 end
 
+-- the achievements page. reads unlock state from the portal (earned entries lit,
+-- the rest dimmed; hidden+unearned shown as ???). plain english, like info/exit.
+local RARITY = {
+  common    = { 0.72, 0.74, 0.80 },
+  uncommon  = { 0.45, 0.88, 0.58 },
+  rare      = { 0.45, 0.72, 1.00 },
+  legendary = { 0.97, 0.82, 0.42 },
+}
+function overlayAchievements(x, y, w, h)
+  local th = T()
+  panel(x, y, w, h)
+  local pad = 26
+  love.graphics.setFont(UI.f); setc(th.english)
+  love.graphics.printf("achievements", x, y + 16, w, "center")
+  -- tally
+  local earned, epts, tpts = 0, 0, 0
+  for _, a in ipairs(ACHV) do
+    tpts = tpts + (a.points or 10)
+    if Portal.isUnlocked(a.key) then earned = earned + 1; epts = epts + (a.points or 10) end
+  end
+  love.graphics.setFont(UI.fs); setc(th.accent)
+  love.graphics.printf(earned .. " / " .. #ACHV .. "   \194\183   " .. epts .. " / " .. tpts .. " pts",
+    x, y + 46, w, "center")
+  -- rows
+  local top = y + 80
+  local rowH = math.min(48, (h - 80 - pad) / #ACHV)
+  for i, a in ipairs(ACHV) do
+    local ry = top + (i - 1) * rowH
+    local got = Portal.isUnlocked(a.key)
+    local rc = RARITY[a.rarity or "common"] or RARITY.common
+    local cy = ry + rowH / 2 - 4
+    -- status dot (filled when earned)
+    setc(got and rc or th.barbg); love.graphics.circle("fill", x + pad + 9, cy, 7)
+    setc(rc, got and 1 or 0.5); love.graphics.setLineWidth(2); love.graphics.circle("line", x + pad + 9, cy, 7)
+    local title, desc = a.title, a.desc
+    if a.hidden and not got then title = "???"; desc = "a secret — yet to be earned" end
+    love.graphics.setFont(UI.f); setc(got and rc or th.english, got and 1 or 0.45)
+    love.graphics.print(title, x + pad + 30, ry + 1)
+    love.graphics.setFont(UI.fs); setc(th.english, got and 0.85 or 0.4)
+    love.graphics.print(desc, x + pad + 30, ry + 24)
+    love.graphics.setFont(UI.fs); setc(rc, got and 1 or 0.5)
+    love.graphics.printf((a.points or 10) .. " pts", x, ry + 9, w - pad, "right")
+  end
+  love.graphics.setFont(UI.fs); setc(th.accent)
+  love.graphics.printf("(click anywhere to close)", x, y + h - 28, w, "center")
+end
+
 -- settings rows: each toggles between two rune options. cur shown highlighted.
 function overlaySettings(x, y, w, h, autoOn)
   local th = T()
@@ -622,7 +713,7 @@ function overlaySettings(x, y, w, h, autoOn)
     elseif id == "ui" then return UI.cool and 2 or 1 end
     return 1
   end
-  local mx, my = love.mouse.getPosition()
+  local mx, my = vmouse()
   local hoverTr
   local ry = y + pad + 56
   local rowH = (h - (pad + 56) - pad) / #L.settings
@@ -680,7 +771,7 @@ end
 -- the "type RESET" confirmation modal (drawn on top of everything)
 function UI.resetModal(buf)
   local th = T()
-  local w, h = love.graphics.getDimensions()
+  local w, h = UI.W, UI.H
   love.graphics.setColor(0, 0, 0, 0.6); love.graphics.rectangle("fill", 0, 0, w, h)
   local pw, ph = math.min(520, w * 0.7), 200
   local px, py = w / 2 - pw / 2, h / 2 - ph / 2
@@ -746,7 +837,7 @@ end
 function UI.play(sim, ctx)
   local th = T()
   drawBG()
-  local w, h = love.graphics.getDimensions()
+  local w, h = UI.W, UI.H
   local m, tabH, inputH, headerH = 16, 44, 46, 26
   -- which tab is "open": the map (karth) is the default view, else the active overlay
   local selTab = (ctx.overlay == "stats" and "stats") or (ctx.overlay == "codex" and "codex")
@@ -837,7 +928,7 @@ end
 
 -- a red edge-flash when you take damage, so harm is never silent
 function UI.damageFlash(a)
-  local w, h = love.graphics.getDimensions()
+  local w, h = UI.W, UI.H
   love.graphics.setColor(0.92, 0.16, 0.13, 0.55 * a)
   local b = 26
   love.graphics.rectangle("fill", 0, 0, w, b)
@@ -849,7 +940,7 @@ end
 -- one-time intro shown at the start of a run (the "you stir at the {vael'thuun}…")
 function UI.introScreen(text)
   local th = T()
-  local w, h = love.graphics.getDimensions()
+  local w, h = UI.W, UI.H
   love.graphics.setColor(0, 0, 0, 0.7); love.graphics.rectangle("fill", 0, 0, w, h)
   local pw, ph = math.min(680, w * 0.8), math.min(360, h * 0.7)
   local px, py = w / 2 - pw / 2, h / 2 - ph / 2
@@ -870,7 +961,7 @@ end
 function UI.over(sim, ctx)
   local th = T()
   drawBG()
-  local w, h = love.graphics.getDimensions()
+  local w, h = UI.W, UI.H
   local line, cause
   if sim.status == "ascended" then line = "si'larbentethegn ugnaken"; cause = "the Sleeper wakes — you win"
   elseif sim.status == "dissolved" then line = "bul'narth vaen"; cause = "your grip (SETH) ran out"

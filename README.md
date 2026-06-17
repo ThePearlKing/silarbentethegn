@@ -79,6 +79,8 @@ Everything renders in one of three scripts, switchable in settings — each opti
 - **Guided tutorial** — teaches the loop in order, taking you to the right tab for each step, without dispelling the mystery.
 - **"The rite plays itself"** — a watchable autoplay mode driven by a solver that *knows the strategy but not the map*: it explores blind, routes around foes, breaks through only when blocked, and wins (1x / 5x / 10x speeds).
 - **Two UI themes** — a colourful "cool" skin (default) and a deliberately plain one.
+- **Scales without stretching** — laid out at a fixed resolution and scaled uniformly to the window (black letterbox bars), so proportions never distort.
+- **Achievements** — 11 of them (some hidden), with an in-game achievements page. Integrates with [games.brassey.io](https://games.brassey.io) (unlocks + player identity) when embedded there, and stays silent on the desktop build.
 
 ---
 

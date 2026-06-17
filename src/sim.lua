@@ -6,6 +6,7 @@
 local W = require("src.world")
 local E = require("src.enemies")
 local L = require("src.lang")
+local Portal = require("src.portal")   -- achievement unlocks (silent off the web portal)
 
 local M = {}
 
@@ -198,6 +199,7 @@ local function doSense(out)
   -- rarely, a secret whisper of the deeper truth surfaces as you sense
   if love.math.random() < 0.12 then
     out[#out + 1] = entry("whisper", WHISPERS[love.math.random(#WHISPERS)])
+    Portal.unlock("whisper_heard")
   end
   return true
 end
@@ -210,6 +212,7 @@ local function doChannel(out)
   if M.thuum < 12 then out[#out + 1] = sys("noessence"); return false end
   M.thuum = clamp(M.thuum - 12)
   M.sig[which] = clamp(M.sig[which] + 20 + M.vyr * 0.12)
+  if M.sig[which] >= 50 then Portal.unlock("first_sigil") end
   M.vyr = clamp(M.vyr + 4)
   M.gloam = clamp(M.gloam + 4)
   out[#out + 1] = sys("channeled")
@@ -256,6 +259,7 @@ local function doUtter(out)
   -- the sigils must hold light to give: drained to nothing, the Word breaks.
   if M.attune() <= 0 then
     M.gloam = clamp(M.gloam + 10)
+    Portal.unlock("word_breaks")
     out[#out + 1] = sys("discord"); return true   -- spent: go re-light the shrines
   end
   -- uttering spends ALL three sigils (-20 each); the wake it gives scales with how
@@ -269,7 +273,7 @@ local function doUtter(out)
   M.sig.qor  = clamp(M.sig.qor - 20)
   M.sig.neth = clamp(M.sig.neth - 20)
   out[#out + 1] = entry("sys", "{ugnaken thenn} " .. math.floor(gain))
-  if M.wake >= 100 then M.status = "ascended" end
+  if M.wake >= 100 then M.status = "ascended"; Portal.unlock("ascended") end
   return true
 end
 
@@ -284,6 +288,8 @@ local function doStrike(dir, out)
   out[#out + 1] = entry("sys", "{kresh thenn vaen} " .. dmg)
   if foe.glamour <= 0 then
     foe.alive = false; M.kills = M.kills + 1
+    Portal.unlock("first_unmaking")
+    if foe.boss then Portal.unlock("warden_folded") end
     local r = foe.reward or {}
     if r.vyr then M.vyr = clamp(M.vyr + r.vyr) end
     if r.thuum then M.thuum = clamp(M.thuum + r.thuum) end
@@ -299,6 +305,17 @@ end
 
 -- --------------------------------------------------------------- dispatch ----
 -- returns: entries(list), action(string|nil "codex")
+-- state-based achievement unlocks, checked after each turn
+local function achvCheck()
+  local cn = M.nodes[M.node]
+  if cn then
+    if cn.sec == W.SECTIONS then Portal.unlock("into_the_deep") end   -- reached the deep
+    if cn.type == "heart" then Portal.unlock("heart_found") end
+  end
+  if M.gloam >= 90 then Portal.unlock("corruption_brink") end
+  if math.min(M.sig.za, M.sig.qor, M.sig.neth) >= 50 then Portal.unlock("three_sigils") end
+end
+
 function M.command(raw)
   local out = {}
   if M.status ~= "play" then return out, nil end
@@ -312,6 +329,7 @@ function M.command(raw)
     doMove(head, out)
     checkDeath(out)
     if M.status == "play" then tick(); checkDeath(out) end
+    achvCheck()
     return out, nil
   end
 
@@ -338,6 +356,7 @@ function M.command(raw)
     checkDeath(out)
     if M.status == "play" then tick(); checkDeath(out) end
   end
+  achvCheck()
   return out, nil
 end
 
