@@ -105,6 +105,10 @@ local function runCommand(raw)
   local verb = canonVerb(raw)
   local entries = sim.command(raw)
   pushAll(entries); trimLog(); G.scroll = 0
+  -- a secret whisper, if one surfaced this turn (shown faintly over the map)
+  for _, e in ipairs(entries) do
+    if e.kind == "whisper" then G.whisper = e.text; G.whisperT = love.timer.getTime() end
+  end
   -- sound feedback
   local foeNow = sim.foe() ~= nil
   local harm = (sim.harm or 0) > 0          -- real damage (hazard / foe bite), not the passive bleed
@@ -250,7 +254,8 @@ function love.draw()
   elseif G.state == "play" then
     UI.play(sim, { log = G.log, cmdbuf = G.cmdbuf, scroll = G.scroll, overlay = G.overlay,
                    auto = AP.enabled, autoSpeed = AP.speed, tutorialText = (T.active and T.text()) or nil,
-                   tutorialContinue = (T.active and T.needsContinue()) or false })
+                   tutorialContinue = (T.active and T.needsContinue()) or false,
+                   whisper = G.whisper, whisperAge = G.whisperT and (love.timer.getTime() - G.whisperT) or nil })
     G._lines = G._consoleLines or 0
     G._visible = G._consoleVisible or 1
     if G.intro then UI.introScreen(G.introText) end

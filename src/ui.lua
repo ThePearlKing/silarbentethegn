@@ -797,6 +797,30 @@ function UI.play(sim, ctx)
     love.graphics.print(hint, bx2 + 62, by2 + 9)
   end
 
+  -- a SECRET whisper, surfacing faintly over the map and fading (only on the map view)
+  if ctx.whisper and ctx.whisperAge and ctx.whisperAge < 7 and not ctx.overlay then
+    local a = math.max(0, 0.7 * (1 - ctx.whisperAge / 7))
+    local font, gs = UI.fs, math.floor(UI.fs:getHeight() * 0.92)
+    love.graphics.setFont(font)
+    local space = font:getWidth(" ")
+    local goff = (font:getHeight() - gs) * 0.5
+    local lineH = math.floor(font:getHeight() * 1.5)
+    local lines = R.layout(ctx.whisper, font, gs, w * 0.62)
+    local wy = mapY + (mapH - #lines * lineH) / 2
+    for _, line in ipairs(lines) do
+      local lw = 0
+      for j, it in ipairs(line) do lw = lw + it.w + (j > 1 and space or 0) end
+      local cx = w / 2 - lw / 2
+      for j, it in ipairs(line) do
+        if j > 1 then cx = cx + space end
+        if it.t == "g" then setc(th.gel, a); Glyph.drawText(it.word, cx, wy + goff, gs)
+        else setc(th.english, a); love.graphics.print(it.word, cx, wy) end
+        cx = cx + it.w
+      end
+      wy = wy + lineH
+    end
+  end
+
   if ctx.auto then
     -- clickable speed toggle (also F3): shows current autoplay speed, click to switch 1x/5x
     local cw, ch = 150, 28
@@ -855,16 +879,37 @@ function UI.over(sim, ctx)
   Glyph.drawTextCentered(line, w / 2, h * 0.36, 34)
   love.graphics.setFont(UI.fs); setc(th.english)
   love.graphics.printf(cause, 0, h * 0.36 + 48, w, "center")
-  -- runic numeral of wins
+  -- a SECRET revelation, one of several, chosen by this run's seed (changes per run)
+  local secret
+  if sim.status == "ascended" then
+    local S = {
+      "The dream is ending. There was never an \"after\" for it to wake into.",
+      "You were the hand it grew to undo itself — and you did not fail it.",
+      "The silence that let everything exist is over now.",
+      "For the first time in all of forever, it opens its regard.",
+      "Its sleep was the mercy. You were the mistake. Now there is neither.",
+    }
+    secret = S[((sim.seed or 0) % #S) + 1]
+  else
+    local D = {
+      "The dream turns over, and forgets you. It always does.",
+      "A wrong little finger twitches in the deep, and goes still.",
+      "The seal holds. You were not enough of an error.",
+    }
+    secret = D[((sim.seed or 0) % #D) + 1]
+  end
+  setc(th.english, 0.5)
+  love.graphics.printf(secret, w * 0.15, h * 0.36 + 86, w * 0.7, "center")
+  -- runic numeral of wins (pushed below the secret line so they never overlap)
   setc(th.gel)
-  Glyph.drawTextCentered("wins", w / 2 - 30, h * 0.5, 16)
-  Glyph.drawText(tostring(ctx.wins), w / 2 + 30, h * 0.5 - 2, 22)
+  Glyph.drawTextCentered("wins", w / 2 - 30, h * 0.58, 16)
+  Glyph.drawText(tostring(ctx.wins), w / 2 + 30, h * 0.58 - 2, 22)
   if ctx.ai then
     setc(th.foe)
-    Glyph.drawTextCentered("vorae na wins", w / 2, h * 0.56, 14) -- AI run: not counted
+    Glyph.drawTextCentered("vorae na wins", w / 2, h * 0.64, 14) -- AI run: not counted
   end
   setc(th.accent)
-  Glyph.drawTextCentered("kren vaen", w / 2, h * 0.62, 16)
+  Glyph.drawTextCentered("kren vaen", w / 2, h * 0.70, 16)
   reg("overback", 0, 0, w, h)
 end
 

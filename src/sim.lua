@@ -11,6 +11,20 @@ local M = {}
 
 local function clamp(v) if v < 0 then return 0 elseif v > 100 then return 100 else return v end end
 
+-- SECRET lore-whispers: rarely surface when you sense (seth). Written in the tongue
+-- (so they're runes until you decode them or switch to english) — each decodes to a
+-- hint at what the karth really is and what you really are.
+local WHISPERS = {
+  "{this karth is not near the sleeper it is the sleeper}",
+  "{the dark is only a thought it has not thought yet}",
+  "{you are the wrong hand it grew while dreaming}",
+  "{the sigils are the pins of its own sleep}",
+  "{the warden is a piece of it set to guard the rest}",
+  "{when ugna is full there is no after}",
+  "{its sleep was the mercy and you are the mistake}",
+  "{it does not sleep it is folded and waiting}",
+}
+
 local function reveal(id)
   local n = M.nodes[id]
   n.seen = true
@@ -181,6 +195,10 @@ local function doSense(out)
   elseif n.type == "hazard" then hint = "{gloam rot beware}"
   else hint = "{seh qorun na sigil here}" end
   out[#out + 1] = entry("sys", hint)
+  -- rarely, a secret whisper of the deeper truth surfaces as you sense
+  if love.math.random() < 0.12 then
+    out[#out + 1] = entry("whisper", WHISPERS[love.math.random(#WHISPERS)])
+  end
   return true
 end
 
