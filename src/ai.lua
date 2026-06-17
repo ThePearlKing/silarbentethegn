@@ -70,24 +70,33 @@ end
 -- BFS to the target ALLOWING passage through foe tiles (we'll clear them). Only used
 -- when no foe-free route exists. Walk clear tiles; the moment the next tile on the
 -- path is a foe, fight it. The boss is impassable while we still need sigils.
-local function breakThrough(sim, isTarget, needSig, noThuun)
-  local prev, q, vis, head = {}, { sim.node }, { [sim.node] = true }, 1
-  local goal
-  while head <= #q do
-    local cur = q[head]; head = head + 1
-    if cur ~= sim.node and isTarget(sim.nodes[cur]) then goal = cur; break end
-    local n = sim.nodes[cur]
-    for _, dir in ipairs(ALLDIRS) do
-      local to = n.exits[dir]
-      if to and not vis[to] and (sim.nodes[to].visited or sim.nodes[to].seen) then
-        local gid = n.gated[dir]
-        local foe = sim.foes[to] and sim.foes[to].alive and sim.foes[to]
-        local pass = (not gid or sim.gatesOpen[gid])
-        if foe and foe.boss and needSig then pass = false end  -- don't breach the warden yet
-        if pass then vis[to] = true; prev[to] = { cur, dir }; q[#q + 1] = to end
+local function breakThrough(sim, isTarget, needSig, noThuun, confineSec)
+  -- BFS to the goal. First PASS routes AROUND bosses (wardens) — preferred, so we
+  -- only fight one when there's no way around. allowBoss=true is the last resort,
+  -- which also means the warden-ringed heart costs exactly one warden to breach.
+  -- confineSec keeps the search INSIDE one section (no gate-crossing) — used by the
+  -- explore-to-find-the-shrine/gate fallback so it can't wander back through a gate.
+  local function bfs(allowBoss)
+    local prev, q, vis, head = {}, { sim.node }, { [sim.node] = true }, 1
+    while head <= #q do
+      local cur = q[head]; head = head + 1
+      if cur ~= sim.node and isTarget(sim.nodes[cur]) then return prev, cur end
+      local n = sim.nodes[cur]
+      for _, dir in ipairs(ALLDIRS) do
+        local to = n.exits[dir]
+        if to and not vis[to] and (sim.nodes[to].visited or sim.nodes[to].seen)
+            and not (confineSec and (dir == "klor" or sim.nodes[to].sec ~= confineSec)) then
+          local gid = n.gated[dir]
+          local foe = sim.foes[to] and sim.foes[to].alive and sim.foes[to]
+          local pass = (not gid or sim.gatesOpen[gid])
+          if foe and foe.boss and not allowBoss then pass = false end
+          if pass then vis[to] = true; prev[to] = { cur, dir }; q[#q + 1] = to end
+        end
       end
     end
   end
+  local prev, goal = bfs(false)
+  if not goal then prev, goal = bfs(true) end   -- last resort: breach a warden
   if not goal then return nil end
   local node = goal
   while prev[node][1] ~= sim.node do node = prev[node][1] end
@@ -177,20 +186,20 @@ function AI.decide(sim, noThuun)
     local secSig = ({ [1] = "za", [3] = "qor", [5] = "neth" })[curSec]
     if secSig and sim.sig[secSig] < TARGET then
       local e = uncover(sim); if e then return e end
-      return breakThrough(sim, frontier, needSig, noThuun) or "seth"
+      return breakThrough(sim, frontier, needSig, noThuun, curSec) or "seth"
     end
     -- 3) descend via the forward gate
     if fwdGate(here) then return moveStep(sim, "klor") end
     local g = pursue(function(n) return known(n) and fwdGate(n) end)
     if g then return g end
     local e = uncover(sim); if e then return e end
-    return breakThrough(sim, frontier, needSig, noThuun) or "seth"
+    return breakThrough(sim, frontier, needSig, noThuun, curSec) or "seth"
   else
     -- sigils lit: make for the heart (clearing its warden-ring)
     local h = pursue(function(n) return known(n) and n.type == "heart" end)
     if h then return h end
     local e = uncover(sim); if e then return e end
-    return breakThrough(sim, frontier, needSig, noThuun) or "seth"
+    return breakThrough(sim, frontier, needSig, noThuun, curSec) or "seth"
   end
 end
 

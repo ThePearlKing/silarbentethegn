@@ -13,9 +13,9 @@ E.templates = {
   vaelorn = { name = "vael'orn",  glamour = 45, miasma = 4, bite = 2, reward = { vyr = 10, note = "{vael orn unmade}" } },
   qethrave = { name = "qethrave", glamour = 50, miasma = 4, bite = 2, reward = { vyr = 10, note = "{qethrave unmade}" } },
   nethulu  = { name = "nethulu",  glamour = 55, miasma = 5, bite = 2, reward = { vyr = 12, note = "{nethulu unmade}" } },
-  -- the heart's warden (the boss). a little tougher.
-  larth    = { name = "the larth", glamour = 150, miasma = 6, bite = 3, boss = true,
-              reward = { note = "{the larth folds} {si lar bare}" } },
+  -- the heart's wardens (the boss). a ring of them surrounds the heart.
+  larth    = { name = "the warden", glamour = 150, miasma = 6, bite = 3, boss = true,
+              reward = { note = "{the warden folds} {si lar bare}" } },
   -- roamers (stand on random deep tiles)
   ghael    = { name = "ghael",    glamour = 40, miasma = 4, bite = 2, reward = { thuum = 12, note = "{ghael scatters}" } },
   vorm     = { name = "vorm",     glamour = 48, miasma = 5, bite = 2, reward = { thuum = 14, note = "{vorm bursts}" } },

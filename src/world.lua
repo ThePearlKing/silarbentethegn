@@ -77,11 +77,27 @@ function W.build(seed)
       end
       return take()
     end
+    -- the HEART (final section) can sit anywhere that is NOT next to the entry (so the
+    -- entry never lies adjacent). Its grid-neighbours are RESERVED as plain tiles
+    -- (pulled from the pool) so ONLY wardens end up adjacent — however many sides it
+    -- has. Edge/corner is fine; you still have to cut through wardens to reach it.
+    if final then
+      local hc
+      for i = 1, #cells do
+        if cells[i][1] + cells[i][2] ~= 1 then hc = cells[i]; break end  -- skip (1,0)/(0,1)
+      end
+      hc = hc or cells[1]
+      typeAt[hc[1] .. "," .. hc[2]] = "heart"
+      local reserved = { [hc[1] .. "," .. hc[2]] = true }
+      for _, v in pairs(W.dirVec) do reserved[(hc[1] + v[1]) .. "," .. (hc[2] + v[2])] = true end
+      for i = #cells, 1, -1 do
+        if reserved[cells[i][1] .. "," .. cells[i][2]] then table.remove(cells, i) end
+      end
+    end
     -- one sigil-shrine in sections 1, 3 and 5
     local shrineType = ({ [1] = "shrine_za", [3] = "shrine_qor", [5] = "shrine_neth" })[si]
     if shrineType then local kk = take(); typeAt[kk] = shrineType end
     if not final then local kk, c = takeGate(); typeAt[kk] = "gate"; gateCell[si] = c end
-    if final then local kk = take(); typeAt[kk] = "heart" end
     local kk = take(); typeAt[kk] = "font"
     kk = take(); typeAt[kk] = "hazard"
     kk = take(); typeAt[kk] = "hazard"
@@ -146,7 +162,20 @@ function W.build(seed)
     elseif n.type == "shrine_za" then ring(n, "vaelorn")
     elseif n.type == "shrine_qor" then ring(n, "qethrave")
     elseif n.type == "shrine_neth" then ring(n, "nethulu")
-    elseif n.type == "heart" then ring(n, "vorm", "larth") end  -- one neighbour is the boss
+    end
+  end
+  -- the heart is FULLY ringed by wardens: a warden on EVERY enterable neighbour
+  -- (overrides whatever else was there), so every approach to it is guarded.
+  for _, n in pairs(nodes) do
+    if n.type == "heart" then
+      for _, dir in ipairs(W.dirOrder) do
+        local nb = nodes[n.exits[dir]]
+        if nb and not (nb.lx == 0 and nb.ly == 0)
+            and (nb.type == "normal" or nb.type == "font" or nb.type == "hazard") then
+          nb.guardian = "larth"
+        end
+      end
+    end
   end
   -- wanderers in the deeper sections
   local rng = love.math.newRandomGenerator(seed * 977 + 13)
